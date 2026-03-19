@@ -1,0 +1,231 @@
+blueprint:
+  name: Aqara Cube Oracle
+  description: >
+    Magic 8 Ball style oracle using Aqara Cube T1 Pro via Zigbee2MQTT.
+    Flow: shake → place (face) → rotate → stop → reveal.
+  domain: automation
+
+  input:
+    cube_topic:
+      name: Cube MQTT Topic
+      description: >
+        The Zigbee2MQTT topic for your Aqara Cube — find it in Z2M under the
+        device's "About" tab (e.g. zigbee2mqtt/aqara_cube).
+      default: zigbee2mqtt/aqara_cube
+      selector:
+        text:
+
+    oracle_lights:
+      name: Oracle Lights
+      description: >
+        Optional. One or more lights to use as oracle atmosphere. If none are
+        selected, light effects are skipped and only the announcement plays.
+      default: []
+      selector:
+        entity:
+          domain: light
+          multiple: true
+
+    speaker:
+      name: Assist Satellite
+      selector:
+        entity:
+          domain: assist_satellite
+
+    angle_sensor_entity:
+      name: Action Angle Sensor
+      description: >
+        The sensor entity that reports rotation angle — named
+        sensor.{friendly_name}_action_angle in Z2M (e.g. sensor.cube_action_angle).
+      selector:
+        entity:
+          domain: sensor
+
+mode: single
+
+trigger:
+  - platform: mqtt
+    topic: !input cube_topic
+    value_template: "{{ value_json.action }}"
+    payload: "shake"
+
+variables:
+  payload: "{{ trigger.payload_json if trigger.payload_json is defined else dict() }}"
+  action: "{{ payload.action | default('') }}"
+  face: "{{ payload.action_side | default(payload.side | default(1)) | int }}"
+  angle_sensor: !input angle_sensor_entity
+  oracle_lights_list: !input oracle_lights
+
+action:
+  - choose:
+
+      # === SHAKE → START RITUAL ===
+      - conditions: "{{ action == 'shake' }}"
+        sequence:
+
+          # Snapshot lights
+          - service: scene.create
+            data:
+              scene_id: oracle_before
+              snapshot_entities: !input oracle_lights
+
+          # Detect if any light is on
+          - variables:
+              lights_on: >
+                {{ oracle_lights_list | list | count > 0 and
+                   states.light | selectattr('state','eq','on') | list | count > 0 }}
+
+          # Dim lights
+          - choose:
+              - conditions: "{{ lights_on }}"
+                sequence:
+                  - service: light.turn_on
+                    target:
+                      entity_id: !input oracle_lights
+                    data:
+                      brightness_pct: 25
+                      transition: 1
+
+          # Wait for placement (face down)
+          - wait_for_trigger:
+              - platform: mqtt
+                topic: !input cube_topic
+            timeout: "00:00:03"
+
+          - variables:
+              face: >
+                {{ wait.trigger.payload_json.action_side
+                   | default(wait.trigger.payload_json.side | default(1)) | int }}
+
+          # Wait for cube cooldown after side_up before accepting rotation
+          - delay: "00:00:01"
+
+          # Initialize accumulated angle
+          - variables:
+              angle: 0
+
+          # Capture rotation stream
+          - repeat:
+              sequence:
+                - wait_for_trigger:
+                    - platform: mqtt
+                      topic: !input cube_topic
+                  timeout: "00:00:02"
+
+                - choose:
+                    - conditions: >
+                        {{ wait.trigger is not none and
+                           wait.trigger.payload_json.action in ['rotate_left','rotate_right'] }}
+                      sequence:
+                        - variables:
+                            angle: >
+                              {% set delta = wait.trigger.payload_json.action_angle | float(0) %}
+                              {% if delta == 0 %}
+                                {{ angle + (states(angle_sensor) | float(0)) }}
+                              {% else %}
+                                {{ angle + delta }}
+                              {% endif %}
+
+              until: "{{ wait.trigger is none }}"
+
+          # Normalize angle with face offset (prevents gaming rotation direction)
+          - variables:
+              angle: "{{ ((angle + (face - 1) * 60) % 360) }}"
+
+          # Determine category
+          - variables:
+              category: >
+                {% if angle < 144 %}
+                  positive
+                {% elif angle < 252 %}
+                  neutral
+                {% else %}
+                  negative
+                {% endif %}
+
+          # Determine response
+          - variables:
+              response: >
+                {% if category == 'positive' %}
+                  {% set answers = [
+                    "It is... certain.",
+                    "Without... a doubt.",
+                    "You may rely... on it.",
+                    "Yes... definitely.",
+                    "Signs point... to yes.",
+                    "Outlook... good."
+                  ] %}
+                {% elif category == 'neutral' %}
+                  {% set answers = [
+                    "Reply hazy... try again.",
+                    "Ask again... later.",
+                    "Cannot predict... now.",
+                    "Focus... and ask again.",
+                    "The answer... is unclear.",
+                    "Wait... and see."
+                  ] %}
+                {% else %}
+                  {% set answers = [
+                    "Don't count... on it.",
+                    "My reply... is no.",
+                    "Very... doubtful.",
+                    "Outlook... not so good.",
+                    "Signs point... to no.",
+                    "Un... likely."
+                  ] %}
+                {% endif %}
+                {{ answers[(face - 1) % 6] }}
+
+          - variables:
+              oracle_prefix: >
+                {% if category == 'positive' %}
+                  The oracle declares...
+                {% elif category == 'neutral' %}
+                  The oracle whispers...
+                {% else %}
+                  The oracle warns...
+                {% endif %}
+
+          # Reveal lights
+          - choose:
+              - conditions: "{{ lights_on }}"
+                sequence:
+                  - service: light.turn_on
+                    target:
+                      entity_id: !input oracle_lights
+                    data:
+                      brightness_pct: 80
+                      color_name: >
+                        {% if category == 'positive' %}
+                          green
+                        {% elif category == 'neutral' %}
+                          orange
+                        {% else %}
+                          red
+                        {% endif %}
+                      transition: 2
+
+          # Speak — prefix then pause then answer
+          - action: assist_satellite.announce
+            target:
+              entity_id: !input speaker
+            data:
+              message: "{{ oracle_prefix }}"
+              preannounce: true
+
+          - delay: "00:00:01"
+
+          - action: assist_satellite.announce
+            target:
+              entity_id: !input speaker
+            data:
+              message: "{{ response }}"
+              preannounce: false
+
+          # Restore lights
+          - choose:
+              - conditions: "{{ lights_on }}"
+                sequence:
+                  - service: scene.turn_on
+                    target:
+                      entity_id: scene.oracle_before

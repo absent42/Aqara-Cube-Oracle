@@ -50,7 +50,7 @@ zigbee2mqtt/aqara_cube
 
 ### 3. Find your Action Angle sensor entity
 
-In Home Assistant, go to **Settings → Devices & Services → Zigbee2MQTT** and open your cube device. Look for a sensor named:
+In Home Assistant, go to **Settings → Devices & Services** and open your cube device. Look for a sensor named:
 
 ```
 sensor.<friendly_name>_action_angle

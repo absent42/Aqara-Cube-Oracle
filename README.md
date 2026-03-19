@@ -9,7 +9,7 @@ Ask the cube a yes/no question, perform the ritual, and let the oracle speak.
 ## How it works
 
 1. **Shake** the cube — lights dim, the ritual begins
-2. **Place** the cube on any face — the oracle reads which side is down
+2. **Place** the cube on any face — the oracle reads which side is up
 3. **Rotate** the cube left or right to channel your answer
 4. **Stop** — the oracle decides
 5. **Reveal** — lights turn green, orange, or red; the oracle speaks
@@ -21,8 +21,8 @@ The outcome is determined by a combination of which face you land on and how far
 ## Requirements
 
 - **Aqara Cube T1 Pro** (model CTP-R01)
-- **Zigbee2MQTT** with the cube paired and publishing
 - **Home Assistant** with MQTT integration configured
+- **Zigbee2MQTT** with the cube paired and publishing
 - An **Assist Satellite** (e.g. a voice assistant speaker)
 - One or more **lights** to use as oracle atmosphere *(optional — leave blank for announcement only)*
 

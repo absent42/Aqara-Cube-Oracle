@@ -1,5 +1,5 @@
 blueprint:
-  name: Aqara Cube Oracle
+  name: Aqara Cube Magic Oracle
   description: >
     Magic 8 Ball style oracle using Aqara Cube T1 Pro via Zigbee2MQTT.
     Flow: shake → place (face) → rotate → stop → reveal.

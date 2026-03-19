@@ -20,7 +20,7 @@ The outcome is determined by a combination of which face you land on and how far
 
 ## Requirements
 
-- **Aqara Cube T1 Pro** (model CTP-R01)
+- **Aqara Cube T1 Pro** (model CTP-R01) in scene mode
 - **Home Assistant** with MQTT integration configured
 - **Zigbee2MQTT** with the cube paired and publishing
 - An **Assist Satellite** (e.g. a voice assistant speaker)

@@ -4,6 +4,7 @@ blueprint:
     Magic 8 Ball style oracle using Aqara Cube T1 Pro via Zigbee2MQTT.
     Flow: shake → place (face) → rotate → stop → reveal.
   domain: automation
+  source_url: https://github.com/absent42/Aqara-Cube-Oracle/blob/main/aqara_cube_oracle.yaml
 
   input:
     cube_topic:
